@@ -1,4 +1,11 @@
 /*
+ *   opengalax2 touchscreen daemon utilizing tslib
+ *   Copyright 2013 Oskari Rauta <oskari.rauta@gmail.com>
+ *
+ *   Fork of opengalax driver by Pau Oliva Fora form:
+ *   https://github.com/poliva/opengalax
+ *
+ *   Original header:
  *   opengalax touchscreen daemon
  *   Copyright 2012 Pau Oliva Fora <pof@eslack.org>
  *
@@ -9,26 +16,19 @@
  *
  */
 
-#include "opengalax.h"
+#include "opengalax2.h"
 
-#define CONFIG_FILE "/etc/opengalax.conf"
+#define CONFIG_FILE "/etc/opengalax2.conf"
 #define MAXLEN 1024
 
 static const conf_data default_config = {
-	/* serial_device */ "/dev/serio_raw0",
 	/* uinput_device */ "/dev/uinput",
 	/* rightclick_enable */	0,
 	/* rightclick_duration */ 350,
 	/* rightclick_range */ 10,
 	/* direction */ 0,
-	/* psmouse */ 0,
-};
-
-static const calibration_data default_calibration = {
-	/* xmin */ 0,
-	/* xmax */ 2047,
-	/* ymin */ 0,
-	/* ymax */ 2047,
+	/* screen width */ 800,
+	/* screen height */ 480,
 };
 
 int create_config_file (char* file) {
@@ -38,29 +38,16 @@ int create_config_file (char* file) {
 	if (fd == NULL)
 		return 0;
 
-	fprintf(fd, "# opengalax configuration file\n");
+	fprintf(fd, "# opengalax2 configuration file\n");
 	fprintf(fd, "\n#### config data:\n");
-	fprintf(fd, "serial_device=%s\n", default_config.serial_device);
 	fprintf(fd, "uinput_device=%s\n", default_config.uinput_device);
 	fprintf(fd, "rightclick_enable=%d\n", default_config.rightclick_enable);
 	fprintf(fd, "rightclick_duration=%d\n", default_config.rightclick_duration);
 	fprintf(fd, "rightclick_range=%d\n", default_config.rightclick_range);
 	fprintf(fd, "# direction: 0 = normal, 1 = invert X, 2 = invert Y, 4 = swap X with Y\n");
 	fprintf(fd, "direction=%d\n", default_config.direction);
-	fprintf(fd, "# set psmouse=1 if you have a mouse connected into the same port\n");
-	fprintf(fd, "# this usually requires i8042.nomux=1 and i8042.reset kernel parameters\n");
-	fprintf(fd, "psmouse=%d\n", default_config.psmouse);
-	fprintf(fd, "\n#### calibration data:\n");
-	fprintf(fd, "# - values should range from 0 to 2047\n");
-	fprintf(fd, "# - right/bottom must be bigger than left/top\n");
-	fprintf(fd, "# left edge value:\n");
-	fprintf(fd, "xmin=%d\n", default_calibration.xmin);
-	fprintf(fd, "# right edge value:\n");
-	fprintf(fd, "xmax=%d\n", default_calibration.xmax);
-	fprintf(fd, "# top edge value:\n");
-	fprintf(fd, "ymin=%d\n", default_calibration.ymin);
-	fprintf(fd, "# bottom edge value:\n");
-	fprintf(fd, "ymax=%d\n", default_calibration.ymax);
+	fprintf(fd, "screen_width=%d\n", default_config.screen_width);
+	fprintf(fd, "screen_height=%d\n", default_config.screen_height);
 	fprintf(fd, "\n");
 
 	fclose(fd);
@@ -77,6 +64,8 @@ conf_data config_parse (void) {
 
 	sprintf( file, "%s", CONFIG_FILE);
 	if (!file_exists(file)) {
+		if (!running_as_root())
+			return config;
 		if (!create_config_file(file)) {
 			fprintf (stderr,"Failed to create default config file: %s\n", file);
 			exit (1);
@@ -90,14 +79,6 @@ conf_data config_parse (void) {
 	}
 
 	while ((fgets (input, sizeof (input), fd)) != NULL) {
-
-		if ((strncmp ("serial_device=", input, 14)) == 0) {
-			strncpy (temp, input + 14,MAXLEN-1);
-			len=strlen(temp);
-			temp[len-1]='\0';
-			sprintf(config.serial_device, "%s", temp);
-			memset (temp, 0, sizeof (temp));
-		}
 
 		if ((strncmp ("uinput_device=", input, 14)) == 0) {
 			strncpy (temp, input + 14,MAXLEN-1);
@@ -135,71 +116,21 @@ conf_data config_parse (void) {
 			config.direction = atoi(temp);
 		}
 
-		if ((strncmp ("psmouse=", input, 8)) == 0) {
-			strncpy (temp, input + 8,MAXLEN-1);
+		if ((strncmp ("screen_width=", input, 13)) == 0) {
+			strncpy (temp, input + 13, MAXLEN-1);
 			len=strlen(temp);
 			temp[len+1]='\0';
-			config.psmouse = atoi(temp);
+			config.screen_width = atoi(temp);
+		}
+
+		if ((strncmp ("screen_height=", input, 14)) == 0) {
+			strncpy (temp, input + 14, MAXLEN-1);
+			len=strlen(temp);
+			temp[len+1]='\0';
+			config.screen_height = atoi(temp);
 		}
 	}
 
 	fclose(fd);
 	return config;
-}
-
-calibration_data calibration_parse (void) {
-
-	char file[MAXLEN];
-	char input[MAXLEN], temp[MAXLEN];
-	FILE *fd;
-	size_t len;
-	calibration_data calibration = default_calibration;
-
-	sprintf( file, "%s", CONFIG_FILE);
-	if (!file_exists(file)) {
-		if (!create_config_file(file)) {
-			fprintf (stderr,"Failed to create default config file: %s\n", file);
-			exit (1);
-		}
-	}
-
-	fd = fopen (file, "r");
-	if (fd == NULL) {
-		fprintf (stderr,"Could not open configuration file: %s\n", file);
-		exit (1);
-	}
-
-	while ((fgets (input, sizeof (input), fd)) != NULL) {
-
-		if ((strncmp ("xmin=", input, 5)) == 0) {
-			strncpy (temp, input + 5,MAXLEN-1);
-			len=strlen(temp);
-			temp[len+1]='\0';
-			calibration.xmin = atoi(temp);
-		}
-
-		if ((strncmp ("xmax=", input, 5)) == 0) {
-			strncpy (temp, input + 5,MAXLEN-1);
-			len=strlen(temp);
-			temp[len+1]='\0';
-			calibration.xmax = atoi(temp);
-		}
-
-		if ((strncmp ("ymin=", input, 5)) == 0) {
-			strncpy (temp, input + 5,MAXLEN-1);
-			len=strlen(temp);
-			temp[len+1]='\0';
-			calibration.ymin = atoi(temp);
-		}
-
-		if ((strncmp ("ymax=", input, 5)) == 0) {
-			strncpy (temp, input + 5,MAXLEN-1);
-			len=strlen(temp);
-			temp[len+1]='\0';
-			calibration.ymax = atoi(temp);
-		}
-	}
-
-	fclose(fd);
-	return calibration;
 }
