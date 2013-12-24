@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# re-enable touchscreen when coming from suspend
+# copy to /etc/pm/sleep.d/75_opengalax2 and chmod 755
+#
+
+case "${1}" in
+        resume|thaw)
+		kill -USR1 $(pidof opengalax2)
+		echo "`/bin/date` -- bringing touchscreen up"
+        ;;
+esac
