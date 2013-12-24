@@ -1,71 +1,60 @@
-opengalax - touchscreen daemon
-==============================
+opengalax2 - touchscreen daemon utilizing tslib
+==============================================
 
-&copy; 2012 Pau Oliva Fora - pof[at]eslack(.)org
+&copy; 2013 Oskari Rauta - oskari.rauta[at]gmail(.)com
 
-Opengalax is a Linux userland input device driver for touchscreen panels manufactured by [EETI](http://home.eeti.com.tw/web20/eGalaxTouchDriver/linuxDriver.htm): eGalax, eMPIA, TouchKit, Touchmon, HanTouch, D-WAV Scientific Co, eTurboTouch, Faytech, PanJit, 3M MicroTouch EX II, ITM, etc.
+Opengalax2 is a Linux userland input device driver for touchscreen panels manufactured by
+touchscreen vendors that are supported by tslib. Original OpenGalax touchscreen daemon
+supported serial devices manufactured by [EETI](http://home.eeti.com.tw/web20/eGalaxTouchDriver/linuxDriver.htm):
+eGalax, eMpia, TouchKit, Touchmon, HanTouch, D-WAV Scientific Co, eTurboTouch, Faytech, PanJit,
+3M MicroTouch EX II, ITM, etc.
 
-The panels can be connected using 3 different interfaces: 
-- USB (Hardware ID: USB\VID_0EEF&PID_0001 or USB\VID_0EEF&PID_0002)
-- RS232 (Hardware ID: SERNUM\EGX5800, SERNUM\EGX5900, SERNUM\EGX6000, SERNUM\EGX5901 and SERNUM\EGX5803)
-- PS/2 (Hardware ID: *PNP0F13)
+This driver supports USB versions of same devices through tslib. Calibration is done with tslib,
+user only needs to set desired display resolution.
 
-At the moment only PS/2 (via serio_raw) interface is supported because this is the hardware I have, but it shouldn't be
-difficult to adapt the source for USB or Serial (RS232) devices. Feel free to fork and send a pull request if you can
-adapt it for other devices/interfaces.
+This is fork based on Pau Oliva Fora's work at https://github.com/poliva/opengalax
+copyrighted 2012 by Pau Oliva Fora - pof[at]eslack(.)org
 
 **Why?** Because EETI only offers closed source binary drivers for those touch panels, the eGalax Touch driver is outdated
-and doesn't work properly on new Xorg servers (the module ABI differs), and the newer closed source eGTouch daemon driver
-doesn't work properly with PS2 devices like mine, so I wrote opengalax to have an alternative Open Source (GPL) driver.
+and doesn't work properly on new Xorg servers (the module ABI differs) or wayland/weston, and the newer closed source 
+eGTouch daemon driver doesn't work properly with PS2 devices nor USB devices like mine, so I forked Pau Oliva's opengalax
+and changed it to use device through tslib to have an alternative Open Source (GPL) driver.
 
 
 Configuration
 -------------
 
-When first launched opengalax will create a configuration file in `/etc/opengalax.conf' with the default configuration values:
+When first launched, opengalax2 will create a configuration file in `/etc/opengalax.conf' with the default configuration values:
 
     # opengalax configuration file
 
     #### config data:
-    serial_device=/dev/serio_raw0
     uinput_device=/dev/uinput
     rightclick_enable=0
     rightclick_duration=350
     rightclick_range=10
     # direction: 0 = normal, 1 = invert X, 2 = invert Y, 4 = swap X with Y
     direction=0
-    # set psmouse=1 if you have a mouse connected into the same port
-    # this usually requires i8042.nomux=1 and i8042.reset kernel parameters
-    psmouse=0
-
-    #### calibration data:
-    # - values should range from 0 to 2047
-    # - right/bottom must be bigger than left/top
-    # left edge value:
-    xmin=0
-    # right edge value:
-    xmax=2047
-    # top edge value:
-    ymin=0
-    # bottom edge value:
-    ymax=2047
+    screen_width=800
+    screen_height=480
 
 
 When launched without parameters, opengalax will read the configuration from this
 config file, some configuration values can also be overwritten via the command line:
 
     Usage: opengalax [options]
-        -c                   : calibration mode
+        -x number            : override display width from configuration
+        -y number            : override display height from configuration
+        -v                   : display version and exit
+        -d                   : display set configuration (with changes through -x and -y possibly)
     	-f                   : run in foreground (do not daemonize)
-    	-s <serial-device>   : default=/dev/serio_raw0
     	-u <uinput-device>   : default=/dev/uinput
 
 
 Calibration
 -----------
 
-Altough opengalax provides a basic calibration mode (-c command line switch), for best results
-it is recommended to use xinput_calibrator and leave the default values in opengalax configuration file.
+Calibration is supposed to be done and set with tslib's provided calibration.
 
 Usage in Xorg
 -------------
@@ -73,11 +62,3 @@ Usage in Xorg
 Opengalax will configure evdev xorg driver to handle right click emulation by default, so you don't need
 to enable right click emulation in the configuration file. If for some reason you do not want to use evdev,
 opengalax can handle the right click emulation itself by enabling it in the configuration file.
-
-Ubuntu packages
----------------
-Official Ubuntu packages are available in [poliva/opengalax ppa](https://launchpad.net/~poliva/+archive/opengalax):
-
-     sudo add-apt-repository ppa:poliva/opengalax
-     sudo apt-get update
-     sudo apt-get install opengalax
