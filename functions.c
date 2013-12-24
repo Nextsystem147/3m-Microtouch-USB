@@ -1,4 +1,11 @@
 /*
+ *   opengalax2 touchscreen daemon utilizing tslib
+ *   Copyright 2013 Oskari Rauta <oskari.rauta@gmail.com>
+ *
+ *   Fork of opengalax driver by Pau Oliva Fora form:
+ *   https://github.com/poliva/opengalax
+ *
+ *   Original header:
  *   opengalax touchscreen daemon
  *   Copyright 2012 Pau Oliva Fora <pof@eslack.org>
  *
@@ -9,9 +16,12 @@
  *
  */
 
-#define DEFAULT_PID_FILE "/var/run/opengalax.pid"
+#define DEFAULT_PID_FILE "/var/run/opengalax2.pid"
+#define MAX_KEYWORD_LEN 256
+#define MAX_PARAM_LEN 48
+#define GALAX_DEVICE_NAME "N: Name=\"eGalax Inc. USB TouchController\""
 
-#include "opengalax.h"
+#include "opengalax2.h"
 
 int running_as_root (void) {
 	uid_t uid, euid;	
@@ -31,10 +41,10 @@ int time_elapsed_ms (struct timeval *start, struct timeval *end, int ms) {
 	return 0;
 }
 
-int configure_uinput (void) {
-
-	calibration_data calibration;
-	calibration = calibration_parse();
+int setup_uinput_dev (int screen_width, int screen_height) {
+	fd_uinput = open (conf.uinput_device, O_WRONLY | O_NONBLOCK);
+	if (fd_uinput < 0)
+		die ("error: uinput");
 
 	if (ioctl (fd_uinput, UI_SET_EVBIT, EV_KEY) < 0)
 		die ("error: ioctl");
@@ -54,23 +64,17 @@ int configure_uinput (void) {
 	if (ioctl (fd_uinput, UI_SET_ABSBIT, ABS_Y) < 0)
 		die ("error: ioctl");
 
-
 	memset (&uidev, 0, sizeof (uidev));
 	snprintf (uidev.name, UINPUT_MAX_NAME_SIZE, "opengalax");
-	uidev.id.bustype = BUS_I8042;
+	uidev.id.bustype = BUS_VIRTUAL;
 	uidev.id.vendor = 0xeef;
 	uidev.id.product = 0x1;
 	uidev.id.version = 1;
-	/*
+
 	uidev.absmin[ABS_X] = 0;
-	uidev.absmax[ABS_X] = X_AXIS_MAX-1;
+	uidev.absmax[ABS_X] = screen_width - 1;
 	uidev.absmin[ABS_Y] = 0;
-	uidev.absmax[ABS_Y] = Y_AXIS_MAX-1;
-	*/
-	uidev.absmin[ABS_X] = calibration.xmin;
-	uidev.absmax[ABS_X] = calibration.xmax;
-	uidev.absmin[ABS_Y] = calibration.ymin;
-	uidev.absmax[ABS_Y] = calibration.ymax;
+	uidev.absmax[ABS_Y] = screen_height - 1;
 
 	if (write (fd_uinput, &uidev, sizeof (uidev)) < 0)
 		die ("error: write");
@@ -81,103 +85,132 @@ int configure_uinput (void) {
 	return 0;
 }
 
-int setup_uinput_dev (const char *ui_dev) {
-	fd_uinput = open (ui_dev, O_WRONLY | O_NONBLOCK);
-	if (fd_uinput < 0) 
-		die ("error: uinput");
-	return configure_uinput ();
-}
-
-
-int open_serial_port (const char *fd_device) {
-	fd_serial = open (fd_device, O_RDWR | O_NOCTTY | O_NDELAY);
-	if (fd_serial == -1) {
-		perror ("open_port: Unable to open serial port");
-		exit (1);
-	}
-	else
-		fcntl (fd_serial, F_SETFL, 0);
-
-	return 0;
-}
-
-int init_panel (void) {
-
-	int i;
-	unsigned char r;
-	ssize_t res;
-	unsigned char init_seq[8] = { 0xf5, 0xf3, 0x0a, 0xf3, 0x64, 0xf3, 0xc8, 0xf4 };
-	int ret=1;
-
-	for (i=0;i<8;i++) {
-
-		usleep (10000);
-		res = write (fd_serial, &init_seq[i], 1);
-		res = read (fd_serial, &r, 1);
-
-		if (res < 0)
-			die ("error reading from serial port");
-
-		if (DEBUG)
-			printf ("SENT: %.02X READ: %.02X\n", init_seq[i], r);
-
-		if (r != CMD_OK ) {
-			fprintf (stderr,"panel initialization failed: 0x%.02X != 0x%.02X\n", r, CMD_OK);
-			ret=0;
-		}
-
-	}
-
-	return ret;
-}
-
-void initialize_panel (int sig) {
-
-	(void) sig;
-	int init_ok=0, i;
-
-	// panel initialization
-	for (i=0; i<10; i++) {
-		if (init_ok)
-			break;
-		init_ok = init_panel();
-	}
-
-	if (!init_ok) {
-		fprintf(stderr, "error: failed to initialize panel\n");
-		remove_pid_file();
-		if (ioctl (fd_uinput, UI_DEV_DESTROY) < 0)
-			die ("error: ioctl");
-		close (fd_uinput);
-		close(fd_serial);
-		exit (-1);
-	}
-}
-
 void signal_handler (int sig) {
-
-        (void) sig;
-
+	(void) sig;
 	remove_pid_file();
 
 	if (ioctl (fd_uinput, UI_DEV_DESTROY) < 0)
 		die ("error: ioctl");
 
 	close (fd_uinput);
+	exit(1);
+}
 
-	if (use_psmouse) {
-		uinput_destroy();
-		psmouse_disconnect();
-		uinput_close();
+void bindToGalax (void) {
+	FILE *fp = NULL;
+	char keyword[MAX_KEYWORD_LEN];
+	char param[MAX_PARAM_LEN];
+	unsigned char thisDev = 0;
+	int ch, devFound = 0;
+	unsigned int i = 0;
+
+	//if ( ts )
+	//	return;
+
+	fp = fopen("/proc/bus/input/devices", "r");
+    
+	if (!fp) {
+		int err = errno;
+		fprintf(stderr, "error: Unable to open file /proc/bus/input/devices.\r\nError: %s\n", strerror(err));
+		exit(-1);
 	}
 
-	close(fd_serial);
+	while ( !feof(fp) ) {
 
-        exit(1);
+		ch = fgetc(fp);
+		if ( ch == 'N' ) {
+			memset(keyword, 0, sizeof(keyword));
+			i = 0;
+			while (( !feof(fp)) && ( ch != '\n' )) {
+				if ( i < sizeof(keyword) - 2 )
+					keyword[i++] = ch;
+				ch = fgetc(fp);
+			}
+                
+			if ( strcmp(keyword, GALAX_DEVICE_NAME) == 0 ) {
+				devFound = 1;
+				thisDev = 1;
+			} else thisDev = 0;
+		}
+
+		if (( ch == 'H' ) && ( thisDev )) {
+			memset(keyword, 0, sizeof(keyword));
+			i = 0;
+			while (( !feof(fp)) && ( ch != '\n')) {
+				if ( i < sizeof(keyword) - 2 )
+					keyword[i++] = ch;
+				ch = fgetc(fp);
+			}
+
+			if ( strncmp(keyword, "H: Handlers=", 12) == 0 ) {
+				int lastParam = 0;
+				int paramEnd, paramBegin = 12;
+
+				while ( !lastParam ) {
+					memset(param, 0, sizeof(param));
+					paramEnd = 0;
+
+					while (( keyword[paramBegin + paramEnd] != ' ') && ( keyword[paramBegin + paramEnd] != 0 ))
+						paramEnd++;
+
+					if (( keyword[paramBegin + paramEnd] == 0 ) || ( keyword[paramBegin + paramEnd + 1] == 0 ))
+						lastParam = 1;
+
+					strncpy(param, keyword+paramBegin, paramEnd);
+					if ( strncmp(param, "event", 5) == 0 ) {
+						fclose(fp);
+						char eventPath[16 + paramEnd];
+						sprintf(eventPath, "/dev/input/%s", param);
+						ts = ts_open(eventPath, 0);
+
+						printf("Binding tslib to %s\n", eventPath);
+						return;
+					}
+					paramBegin += paramEnd + 1;
+				}
+			}
+		}
+		while (( !feof(fp)) && ( ch != '\n' ))
+			ch = fgetc(fp);
+	}
+
+	fclose(fp);
+
+	if ( devFound )
+		fprintf(stderr, "error: Unable to parse event handler for eGalax Touchscreen from /proc/bus/input/devices.\nEvent handler missing, or file format cannot be parsed.\n");
+	else
+		fprintf(stderr, "error: Unable find eGalax Touchscreen from /proc/bus/input/devices.\nMissing %s\n", GALAX_DEVICE_NAME);
+	exit(-1);
+}
+
+void initialize_panel (int sig) {
+	(void) sig;
+	bindToGalax();
+
+	if (!ts) {
+		fprintf(stderr, "error: ts_open\n");
+		remove_pid_file();
+
+		if (ioctl (fd_uinput, UI_DEV_DESTROY) < 0)
+			die ("error: ioctl");
+
+		close (fd_uinput);
+		exit(-1);
+	}
+
+	if (ts_config(ts)) {
+		fprintf(stderr, "error: ts_config\n");
+		remove_pid_file();
+
+		if (ioctl (fd_uinput, UI_DEV_DESTROY) < 0)
+			die ("error: ioctl");
+
+		close (fd_uinput);
+		exit(-1);
+	}
 }
 
 void signal_installer (void) {
-
 	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
 	signal(SIGHUP, signal_handler);
@@ -201,7 +234,6 @@ char* default_pid_file (void) {
 }
 
 int create_pid_file (void) {
-
 	int fd;
 	char *pidfile;
 	char buf[100];
@@ -288,4 +320,10 @@ int remove_pid_file (void) {
 		return 0;
 	}
 	return 1;
+}
+
+char *file_basename(char *path)
+{
+    char *base = strrchr(path, '/');
+    return base ? base+1 : path;
 }
