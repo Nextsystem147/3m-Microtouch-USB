@@ -43,12 +43,12 @@ When launched without parameters, opengalax will read the configuration from thi
 config file, some configuration values can also be overwritten via the command line:
 
     Usage: opengalax [options]
-        -x number            : override display width from configuration
-        -y number            : override display height from configuration
+        -x number            : override display width (default: 800)
+        -y number            : override display height (default: 480)
         -v                   : display version and exit
         -d                   : display set configuration (with changes through -x and -y possibly)
     	-f                   : run in foreground (do not daemonize)
-    	-u <uinput-device>   : default=/dev/uinput
+    	-u <uinput-device>   : override uinput device (default: /dev/uinput)
 
 
 Calibration
