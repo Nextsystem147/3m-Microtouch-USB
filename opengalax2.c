@@ -82,8 +82,8 @@ int main (int argc, char *argv[]) {
 			default:
 				printf("%s v%s%s - %s\n", APPNAME, VERSION, EXTRAVERSION, AUTHOR);
 				printf("Usage: %s [options]\n", file_basename(argv[0]));
-				printf("        -x number            : override display width from configuration\n");
-				printf("        -y number            : override display height from configuration\n");
+				printf("        -x number            : override display width (default: %d)\n", conf.screen_width);
+				printf("        -y number            : override display height (default: %d)\n", conf.screen_height);
 				printf("        -u <uinput-device>   : default=%s\n", conf.uinput_device);
 				printf("	-v                   : display version and exit\n");
 				printf("        -d                   : display configuration\n");
