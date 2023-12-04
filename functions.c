@@ -16,12 +16,18 @@
  *
  */
 
-#define DEFAULT_PID_FILE "/var/run/opengalax2.pid"
+#define DEFAULT_PID_FILE "/var/run/opengalax3.pid"
 #define MAX_KEYWORD_LEN 256
 #define MAX_PARAM_LEN 48
-#define GALAX_DEVICE_NAME "N: Name=\"eGalax Inc. USB TouchController\""
-
+//#define GALAX_DEVICE_NAME "N: Name=\"eGalax Inc. USB TouchController\""
+#define GALAX_DEVICE_NAME "N: Name=\"3M 3M USB Touchscreen - AGI\""
 #include "opengalax2.h"
+
+ struct tsdev *ts;
+ int fd_uinput;
+ struct uinput_user_dev uidev;
+ conf_data conf;
+ struct timeval tv;
 
 int running_as_root (void) {
 	uid_t uid, euid;	
@@ -49,6 +55,9 @@ int setup_uinput_dev (int screen_width, int screen_height) {
 	if (ioctl (fd_uinput, UI_SET_EVBIT, EV_KEY) < 0)
 		die ("error: ioctl");
 
+	if (ioctl (fd_uinput, UI_SET_KEYBIT, BTN_TOUCH) < 0)
+		die ("error: ioctl");
+		
 	if (ioctl (fd_uinput, UI_SET_KEYBIT, BTN_LEFT) < 0)
 		die ("error: ioctl");
 
@@ -65,9 +74,10 @@ int setup_uinput_dev (int screen_width, int screen_height) {
 		die ("error: ioctl");
 
 	memset (&uidev, 0, sizeof (uidev));
-	snprintf (uidev.name, UINPUT_MAX_NAME_SIZE, "opengalax");
+	snprintf (uidev.name, UINPUT_MAX_NAME_SIZE, "3M USB Nextsystem");
 	uidev.id.bustype = BUS_VIRTUAL;
-	uidev.id.vendor = 0xeef;
+	//uidev.id.vendor = 0xeef;
+	uidev.id.vendor = 0x0596;
 	uidev.id.product = 0x1;
 	uidev.id.version = 1;
 

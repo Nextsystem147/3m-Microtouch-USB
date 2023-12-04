@@ -44,7 +44,7 @@ int main (int argc, char *argv[]) {
 	//ssize_t res;
 
 	struct input_event ev[2];
-	struct input_event ev_button[4];
+	struct input_event ev_button[5];
 	struct input_event ev_sync;
 
 	struct timeval tv_start_click;
@@ -165,6 +165,9 @@ int main (int argc, char *argv[]) {
 	ev_button[BTN2_PRESS].type = EV_KEY;
 	ev_button[BTN2_PRESS].code = BTN_RIGHT;
 	ev_button[BTN2_PRESS].value = 1;
+	ev_button[BTN1_TOUCH].type = EV_KEY;
+	ev_button[BTN1_TOUCH].code = BTN_TOUCH;
+	ev_button[BTN1_TOUCH].value = 1;
 
 	if (foreground)
 		printf("panel initialized\n");
@@ -214,7 +217,108 @@ int main (int argc, char *argv[]) {
 			gettimeofday (&tv_start_click, NULL);
 			gettimeofday (&tv_btn2_click, NULL);
 		}
+		
+		if (first_click) // Make sure that this position is not wrong
+		{
+		
+  		int count = 1;
+  		int tmp = 0;
+  		int x_array[6];
+  		int y_array[6];
 
+  		
+  		struct ts_sample samp3;
+  		int ret3;
+  		
+  		for(int index= 0; index < 6; index++)
+  		{    	x_array[index]=0;
+  			y_array[index]=0;
+  		}
+  		x_array[0]=x;
+  		y_array[0]=y;
+  		
+  		for(int index= 0; index < 5; index++)
+  		{                        
+			ret3 = ts_read(ts, &samp3, 1);
+			if (ret3) {                        
+				count++;
+				for(int arraypointerx= 0; arraypointerx < 6; arraypointerx++)
+  				{  
+  				if(samp3.x < x_array[arraypointerx])
+  				{
+  				continue;
+  				}
+  				else
+  				{
+  				tmp = x_array[arraypointerx];
+  				x_array[arraypointerx] = samp3.x;
+  				//usleep (50);
+  				printf ("x_array: %d x_array[index]: %d \n", index, x_array[index]);
+  				samp3.x = tmp;
+  				}
+  				
+				}
+				
+				for(int arraypointery= 0; arraypointery < 6; arraypointery++)
+  				{  
+  				if(samp3.y < y_array[arraypointery])
+  				{
+  				continue;
+  				}
+  				else
+  				{
+  				tmp = y_array[arraypointery];
+  				y_array[arraypointery] = samp3.y;
+  				//usleep (50);
+  				printf ("y_array: %d y_array[index]: %d \n", index, y_array[index]);
+  				samp3.y = tmp;
+  				}
+ 
+				}
+			}
+		}
+		
+		
+		for(int index= 0; index < 6; index++)
+  		{ 
+		printf ("--y_array: %d y_array[index]: %d \n", index, y_array[index]);
+		printf ("--x_array: %d x_array[index]: %d \n", index, x_array[index]);
+  		}
+		
+		if(count > 2 ){
+		// kill first
+		y_array[0] = y_array[1];
+		x_array[0] = x_array[1];
+		y=0;
+		x=0;
+		
+		// kill last
+		y_array[count] = y_array[count-1];
+		x_array[count] = x_array[count-1];
+		
+		for(int i= 0; i < count; i++)
+  		{ 
+  		y= y + y_array[i];
+  		x= x + x_array[i];
+  		}
+  		
+  		y= y / count;
+  		x= x / count;
+  		}
+  		else
+  		{
+
+		printf("quit next\n");
+  		continue; 
+  		}
+  		
+  		printf ("++y: %d  \n", y);
+		printf ("++x: %d  \n", x);
+  		
+		gettimeofday (&tv_current, NULL);
+		
+		}
+		
 		// load X,Y into input_events
 		memset (ev, 0, sizeof (ev));
 		ev[0].type = EV_ABS;
@@ -283,12 +387,17 @@ int main (int argc, char *argv[]) {
 			}
 
 			// clicking button2
-			if (write(fd_uinput, &ev_button[btn2_state], sizeof (struct input_event)) < 0)
-				die ("error: write");
+			//if (write(fd_uinput, &ev_button[btn2_state], sizeof (struct input_event)) < 0)
+			//	die ("error: write");
 		}
 
 		// clicking button1
-		if (write(fd_uinput, &ev_button[btn1_state], sizeof (struct input_event)) < 0)
+		//if (write(fd_uinput, &ev_button[btn1_state], sizeof (struct input_event)) < 0)
+		//	die ("error: write");
+		
+
+		// Touch Event  Btn1 or 2 not used
+		if (write(fd_uinput, &ev_button[BTN1_TOUCH], sizeof (struct input_event)) < 0)
 			die ("error: write");
 
 		// Sync

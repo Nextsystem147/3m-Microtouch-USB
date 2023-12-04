@@ -15,6 +15,8 @@
  *   of the License, or (at your option) any later version.
  *
  */
+#ifndef __OPENGALAX2_H
+#define __OPENGALAX2_H
 
 #include <errno.h>
 #include <stdio.h>
@@ -46,6 +48,7 @@
 #define BTN1_PRESS 1
 #define BTN2_RELEASE 2
 #define BTN2_PRESS 3
+#define BTN1_TOUCH 4
 
 #define DEBUG 0
 
@@ -65,11 +68,11 @@ typedef struct {
 	int screen_height;
 } conf_data;
 
-struct tsdev *ts;
-int fd_uinput;
-struct uinput_user_dev uidev;
-conf_data conf;
-struct timeval tv;
+extern struct tsdev *ts;
+extern int fd_uinput;
+extern  struct uinput_user_dev uidev;
+extern  conf_data conf;
+extern  struct timeval tv;
 
 /* configfile.c */
 	int create_config_file (char* file);
@@ -118,3 +121,6 @@ byte 4:
 	Y axis value, from 0 to 0x7F
 
 */
+
+
+#endif  /* __OPENGALAX2_H */

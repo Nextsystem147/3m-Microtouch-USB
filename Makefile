@@ -1,7 +1,7 @@
 VERSION=0.9
 EXTRAVERSION?=
-APPNAME=opengalax2
-AUTHOR=(c)2013 Oskari Rauta <oskari.rauta@gmail.com>, (c)2012 Pau Oliva Fora <pof@eslack.org>
+APPNAME=touchNextsystem3m
+AUTHOR=(c)2023 Mario Windhab <mario.windhab@nextsystem.at>,(c)2013 Oskari Rauta <oskari.rauta@gmail.com>, (c)2012 Pau Oliva Fora <pof@eslack.org>
 DESTDIR?=/
 SHELL=/bin/sh
 CC?=gcc
@@ -19,7 +19,7 @@ docdir = $(prefix)/usr/share/doc
 mandir = $(prefix)/usr/share/man
 
 OBJ=functions.o configfile.o opengalax2.o
-BIN=opengalax2
+BIN=touchNextsystem3m
 
 all: ${OBJ}
 	$(CC) $(CFLAGS) $(APP_CFLAGS) ${OBJ} $(APP_LDFLAGS) $(LDFLAGS) -o ${BIN}
